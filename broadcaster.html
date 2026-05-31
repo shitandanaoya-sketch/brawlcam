@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>観戦配信 — BRAWL CAM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;600;700&display=swap');
+
+  :root {
+    --yellow: #FFD93D;
+    --orange: #FF6B35;
+    --dark: #0D0D0D;
+    --mid: #1A1A2E;
+    --accent: #E94560;
+    --green: #06D6A0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--dark);
+    color: #fff;
+    font-family: 'Barlow', sans-serif;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(233,69,96,0.15) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(255,107,53,0.12) 0%, transparent 60%);
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  header h1 {
+    font-family: 'Bebas Neue', cursive;
+    font-size: 2.6rem;
+    letter-spacing: 3px;
+    background: linear-gradient(135deg, var(--yellow), var(--orange));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1;
+  }
+  header p {
+    font-size: 0.75rem;
+    color: #666;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* ── STEP CARDS ── */
+  .step-card {
+    width: 100%;
+    max-width: 420px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .step-label {
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--yellow);
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  /* ── ROOM ID INPUT ── */
+  .room-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  input[type="text"] {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    color: #fff;
+    font-family: 'Barlow', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    padding: 12px 14px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    outline: none;
+    transition: border-color .2s;
+  }
+  input[type="text"]:focus { border-color: var(--yellow); }
+  input[type="text"]::placeholder { color: #444; font-size: 0.9rem; letter-spacing: 1px; }
+
+  .cam-select {
+    background: rgba(255,255,255,0.06);
+    border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    color: #fff;
+    font-family: 'Barlow', sans-serif;
+    font-size: 0.85rem;
+    padding: 10px 12px;
+    outline: none;
+    width: 100%;
+    margin-top: 10px;
+    appearance: none;
+  }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: block;
+    width: 100%;
+    max-width: 420px;
+    padding: 16px;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Bebas Neue', cursive;
+    font-size: 1.4rem;
+    letter-spacing: 3px;
+    cursor: pointer;
+    transition: transform .15s, opacity .15s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--yellow), var(--orange));
+    color: var(--dark);
+  }
+  .btn-danger {
+    background: rgba(233,69,96,0.15);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    margin-top: 10px;
+  }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ── STATUS ── */
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    margin-bottom: 16px;
+  }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #444;
+    transition: background .4s;
+  }
+  .dot.connecting { background: var(--yellow); animation: pulse 1s infinite; }
+  .dot.live       { background: var(--green); }
+  .dot.error      { background: var(--accent); }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.3; }
+  }
+
+  /* ── VIDEO PREVIEW ── */
+  #preview-wrap {
+    width: 100%;
+    max-width: 420px;
+    aspect-ratio: 16/9;
+    background: #111;
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    border: 1.5px solid rgba(255,255,255,0.08);
+    position: relative;
+    display: none;
+  }
+  #preview-wrap.show { display: block; }
+  #preview {
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  .live-badge {
+    position: absolute;
+    top: 10px; left: 10px;
+    background: var(--accent);
+    color: #fff;
+    font-family: 'Bebas Neue', cursive;
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    display: none;
+  }
+  .live-badge.show { display: block; }
+
+  /* ── VIEWER COUNT ── */
+  .viewer-count {
+    font-size: 0.8rem;
+    color: #555;
+    text-align: center;
+    margin-top: 8px;
+  }
+  .viewer-count span { color: var(--green); font-weight: 700; }
+
+  /* ── INFO BOX ── */
+  .info-box {
+    width: 100%;
+    max-width: 420px;
+    background: rgba(6,214,160,0.06);
+    border: 1px solid rgba(6,214,160,0.2);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: #aaa;
+    margin-top: 4px;
+  }
+  .info-box strong { color: var(--green); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎮 BRAWL CAM</h1>
+  <p>Observer Stream — Broadcaster</p>
+</header>
+
+<div class="status-pill">
+  <div class="dot" id="dot"></div>
+  <span id="status-text">待機中</span>
+</div>
+
+<!-- STEP 1: Room ID -->
+<div class="step-card">
+  <div class="step-label">① ルームIDを設定</div>
+  <div class="room-row">
+    <input type="text" id="room-input" maxlength="12" placeholder="例: BRAWL01" />
+    <button class="btn btn-primary" id="gen-btn" style="width:auto;padding:0 16px;font-size:1rem;">自動</button>
+  </div>
+  <p style="font-size:0.72rem;color:#555;margin-top:8px;">※ 観戦者2人で同じIDを決めておく（例: BRAWL01）</p>
+</div>
+
+<!-- STEP 2: Camera -->
+<div class="step-card">
+  <div class="step-label">② カメラ・画面を選択して配信開始</div>
+  <select class="cam-select" id="cam-select">
+    <option value="camera">📷 カメラ（スマホのカメラ）</option>
+    <option value="screen">🖥️ 画面共有（ゲーム画面）</option>
+  </select>
+</div>
+
+<button class="btn btn-primary" id="start-btn">▶ 配信スタート</button>
+
+<!-- Preview -->
+<div id="preview-wrap">
+  <video id="preview" autoplay muted playsinline></video>
+  <div class="live-badge" id="live-badge">● LIVE</div>
+</div>
+
+<button class="btn btn-danger" id="stop-btn" style="display:none;">■ 配信停止</button>
+
+<div class="viewer-count" id="viewer-count" style="display:none;">
+  視聴者: <span id="viewer-num">0</span> 人接続中
+</div>
+
+<div class="info-box">
+  <strong>使い方：</strong><br>
+  1. 観戦者2人が同じ<strong>ルームID</strong>（例: BRAWL01, BRAWL02）を入力<br>
+  2. 「配信スタート」でブロスタ画面を共有<br>
+  3. Mac側のビューワーで2画面を表示<br>
+  4. ゲームが終わったら「配信停止」
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let peer = null;
+let localStream = null;
+const connections = [];
+
+// ランダムID生成
+$('gen-btn').onclick = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let id = '';
+  for (let i = 0; i < 6; i++) id += chars[Math.floor(Math.random() * chars.length)];
+  $('room-input').value = id;
+};
+
+function setStatus(type, text) {
+  $('dot').className = 'dot ' + type;
+  $('status-text').textContent = text;
+}
+
+$('start-btn').onclick = async () => {
+  const roomRaw = $('room-input').value.trim().toUpperCase();
+  if (!roomRaw) { alert('ルームIDを入力してください'); return; }
+  const peerId = 'brawlcam-' + roomRaw;
+  const mode = $('cam-select').value;
+
+  setStatus('connecting', '接続中...');
+  $('start-btn').disabled = true;
+
+  try {
+    if (mode === 'screen') {
+      localStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 30 } },
+        audio: false
+      });
+    } else {
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+    }
+
+    $('preview').srcObject = localStream;
+    $('preview-wrap').classList.add('show');
+
+    peer = new Peer(peerId, { debug: 0 });
+
+    peer.on('open', () => {
+      setStatus('live', 'LIVE配信中 — ID: ' + roomRaw);
+      $('live-badge').classList.add('show');
+      $('stop-btn').style.display = 'block';
+      $('viewer-count').style.display = 'block';
+    });
+
+    peer.on('error', e => {
+      if (e.type === 'unavailable-id') {
+        setStatus('error', 'IDが使用中です。別のIDを試してください');
+      } else {
+        setStatus('error', 'エラー: ' + e.type);
+      }
+      $('start-btn').disabled = false;
+    });
+
+    peer.on('call', call => {
+      call.answer(localStream);
+      connections.push(call);
+      updateViewerCount();
+
+      call.on('close', () => {
+        const i = connections.indexOf(call);
+        if (i > -1) connections.splice(i, 1);
+        updateViewerCount();
+      });
+    });
+
+    // 画面共有が終わったら自動停止
+    localStream.getTracks()[0].onended = () => stopBroadcast();
+
+  } catch (err) {
+    setStatus('error', '取得失敗: ' + (err.message || err));
+    $('start-btn').disabled = false;
+  }
+};
+
+function updateViewerCount() {
+  $('viewer-num').textContent = connections.length;
+}
+
+function stopBroadcast() {
+  if (localStream) localStream.getTracks().forEach(t => t.stop());
+  if (peer) { peer.destroy(); peer = null; }
+  $('preview-wrap').classList.remove('show');
+  $('live-badge').classList.remove('show');
+  $('stop-btn').style.display = 'none';
+  $('viewer-count').style.display = 'none';
+  $('start-btn').disabled = false;
+  setStatus('', '配信停止');
+}
+
+$('stop-btn').onclick = stopBroadcast;
+</script>
+</body>
+</html>
